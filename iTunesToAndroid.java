@@ -136,7 +136,7 @@ public class iTunesToAndroid
 							itunesBrowseButton.addActionListener(new ActionListener(){
 								public void actionPerformed(ActionEvent e)
 								{
-									int returnVal = itunesChooser.showOpenDialog(tabs);
+									int returnVal = itunesChooser.showOpenDialog(window);
 									if(returnVal == JFileChooser.APPROVE_OPTION)
 									{
 										itunesInput.setText(itunesChooser.getSelectedFile().getAbsolutePath());
@@ -155,9 +155,11 @@ public class iTunesToAndroid
 										setupLibraryTab();
 										if(deviceFiles != null)
 											setupSyncTab();
+										showMessagePopup("Library Loaded", "The iTunes library has been successfully loaded.");
 									}
 									catch(iTunesLibrary.InvalidLibraryException x)
 									{
+										showMessagePopup("Error Loading Library", x.getMessage());
 										System.out.println(x);
 									}
 								}
@@ -168,7 +170,7 @@ public class iTunesToAndroid
 					setupPanel.add(itunesInput, new GuiLayout.GuiConstraint(setupPanel,			"0",	"0",	"400",	"25", itunesInput));
 					setupPanel.add(itunesBrowseButton, new GuiLayout.GuiConstraint(setupPanel,	"400",	"0",	"100",	"25", itunesBrowseButton));
 					setupPanel.add(itunesLoadButton, new GuiLayout.GuiConstraint(setupPanel,	"500",	"0",	"100",	"25", itunesLoadButton));
-					setupPanel.add(deviceScanLabel, new GuiLayout.GuiConstraint(setupPanel,		"20",	"40",	"600",	"25", deviceScanLabel));
+					setupPanel.add(deviceScanLabel, new GuiLayout.GuiConstraint(setupPanel,		"20",	"40",	"100%",	"25", deviceScanLabel));
 					
 					playlistPanel = new JPanel(new GuiLayout());
 					{
@@ -285,10 +287,12 @@ public class iTunesToAndroid
 											}
 											catch(DeviceLibrary.DeviceMissingException x1)
 											{
+												showMessagePopup("Error Accessing Device", x1.getMessage());
 												System.out.println(x1);
 											}
 											catch(DeviceLibrary.ADBException x2)
 											{
+												showMessagePopup("Error Running ADB", x2.getMessage());
 												System.out.println(x2);
 											}
 											setupTransferTables();
@@ -383,10 +387,12 @@ public class iTunesToAndroid
 											}
 											catch(DeviceLibrary.DeviceMissingException x1)
 											{
+												showMessagePopup("Error Accessing Device", x1.getMessage());
 												System.out.println(x1);
 											}
 											catch(DeviceLibrary.ADBException x2)
 											{
+												showMessagePopup("Error Running ADB", x2.getMessage());
 												System.out.println(x2);
 											}
 											setupTransferTables();
@@ -426,6 +432,7 @@ public class iTunesToAndroid
 							startPeriodicDeviceScan();
 					}
 				});
+				startPeriodicDeviceScan();
 				
 				add(tabs, new GuiLayout.GuiConstraint(this,	"0,left",	"0,top",	"0,right",	"0,bottom", tabs));
 				
@@ -477,6 +484,11 @@ public class iTunesToAndroid
 				});
 				
 				setupTransferTables();
+			}
+			
+			public void showMessagePopup(String title, String text)
+			{
+				JOptionPane.showMessageDialog(window, text, title, JOptionPane.WARNING_MESSAGE);
 			}
 			
 			public void startPeriodicDeviceScan()

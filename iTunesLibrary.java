@@ -20,6 +20,10 @@ public class iTunesLibrary
 	{
 		// Initial setup.
 		libraryFile = new File(filePath);
+		if(!libraryFile.isFile())
+		{
+			throw new InvalidLibraryException("The path given is not a file.");
+		}
 		DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
 		Document doc;
 		try
@@ -30,15 +34,15 @@ public class iTunesLibrary
 		}
 		catch(ParserConfigurationException x1)
 		{
-			throw new InvalidLibraryException(x1.getMessage(), x1);
+			throw new InvalidLibraryException("ParserConfigurationException: The file could not be parsed as XML. ("+ x1.getMessage() +")", x1);
 		}
 		catch(SAXException x2)
 		{
-			throw new InvalidLibraryException(x2.getMessage(), x2);
+			throw new InvalidLibraryException("SAXException: The file could not be parsed as XML. ("+ x2.getMessage() +")", x2);
 		}
 		catch(IOException x3)
 		{
-			throw new InvalidLibraryException(x3.getMessage(), x3);
+			throw new InvalidLibraryException("IOException: The file could not be parsed as XML. ("+ x3.getMessage() +")", x3);
 		}
 		
 		// Parse XML into Map.
@@ -78,7 +82,7 @@ public class iTunesLibrary
 			}
 			catch(URISyntaxException x)
 			{
-				System.out.println("Music folder not recognized by the program.");
+				System.out.println("Music folder defined in iTunes library is not valid: "+ uriPath);
 			}
 		}
 		else
@@ -348,7 +352,7 @@ public class iTunesLibrary
 		}
 	}
 	
-	public class InvalidLibraryException extends Exception
+	public static class InvalidLibraryException extends Exception
 	{
 		public InvalidLibraryException(String message)
 		{

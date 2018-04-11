@@ -1,6 +1,7 @@
 import java.io.*;
 //import java.net.*;
 import java.util.*;
+import java.util.regex.*;
 
 public class DeviceLibrary
 {
@@ -8,15 +9,16 @@ public class DeviceLibrary
 	{
 		try
 		{
-			ProcessBuilder pb = new ProcessBuilder("adb", "devices");
+			ProcessBuilder pb = new ProcessBuilder("adb", "devices", "-l");
 			pb.redirectErrorStream(true);
 			Process p = pb.start();
 			InputStream in = p.getInputStream();
 			BufferedReader stdInput = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+			Pattern regex = Pattern.compile(".*\\bdevice\\b.*");
 			String s;
 			while((s = stdInput.readLine()) != null)
 			{
-				if(s.endsWith("device"))
+				if(regex.matcher(s).matches())
 					return s;
 			}
 		}
