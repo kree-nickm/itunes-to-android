@@ -95,6 +95,12 @@ public class iTunesLibrary
 	
 	public void buildPlaylistFiles(String[] playlistNames)
 	{
+		if(playlistNames.length == 0)
+		{
+			playlistFiles = null;
+			System.out.println("No playlists selected.");
+			return;
+		}
 		Arrays.sort(playlistNames);
 		playlistFiles = new HashSet<Track>();
 		Iterator iterLists = playlists.iterator();
@@ -152,13 +158,7 @@ public class iTunesLibrary
 	
 	public Set<Track> getPlaylistFiles()
 	{
-		if(playlistFiles != null)
-			return playlistFiles;
-		else
-		{
-			playlistFiles = new HashSet<Track>();
-			return playlistFiles;
-		}
+		return playlistFiles;
 	}
 	
 	public String[][] getDisplayData()
