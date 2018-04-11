@@ -5,7 +5,9 @@ import java.beans.*;
 import java.util.*;
 import java.util.function.*;
 import javax.swing.*;
+import javax.swing.event.*;
 import javax.swing.table.*;
+import javax.swing.filechooser.*;
 import javax.xml.parsers.*;
 import org.w3c.dom.*;
 
@@ -25,8 +27,6 @@ public class iTunesToAndroid
 	
 	public iTunesToAndroid()
 	{
-		library = new iTunesLibrary("D:\\Libraries\\Music\\iTunes\\iTunes Music Library.xml");
-		deviceFiles = new DeviceLibrary("/sdcard/Music/");
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				window = new GuiWindow("iTunes to Android", iTunesToAndroid.this);
@@ -38,6 +38,13 @@ public class iTunesToAndroid
 	
 	public void buildDifferences()
 	{
+		if(library == null || deviceFiles == null)
+		{
+			filesNotOnDevice = new HashSet<iTunesLibrary.Track>();
+			filesNotInPlaylists = new HashSet<DeviceLibrary.Track>();
+			return;
+		}
+		
 		filesNotOnDevice = (Set<iTunesLibrary.Track>)((HashSet)library.getPlaylistFiles()).clone();
 		Iterator<iTunesLibrary.Track> iter1a = filesNotOnDevice.iterator();
 		while(iter1a.hasNext())
@@ -92,7 +99,13 @@ public class iTunesToAndroid
 			protected JButton collectPlaylists;
 			protected JButton copyToDevice;
 			protected JButton deleteFromDevice;
+			protected JButton itunesBrowseButton;
+			protected JButton itunesLoadButton;
 			protected JPanel playlistPanel;
+			protected JPanel setupPanel;
+			protected JTextField itunesInput;
+			protected JFileChooser itunesChooser;
+			protected JLabel deviceScanLabel;
 			
 			protected String[] playlistNames;
 			
@@ -105,6 +118,7 @@ public class iTunesToAndroid
 			protected JDialog deleteDialog;
 			protected JProgressBar deleteProgress;
 			
+			protected SwingWorker scanForDeviceTask;
 			protected SwingWorker transferTask;
 			protected SwingWorker deleteTask;
 			
@@ -112,9 +126,53 @@ public class iTunesToAndroid
 			{
 				tabs = new JTabbedPane();
 				{
+					setupPanel = new JPanel(new GuiLayout());
+					{
+						itunesInput = new JTextField();
+						itunesChooser = new JFileChooser(new File(System.getProperty("user.home") +"\\Music\\iTunes\\"));
+						itunesChooser.setFileFilter(new FileNameExtensionFilter("XML File", "xml"));
+						itunesBrowseButton = new JButton("Browse");
+						{
+							itunesBrowseButton.addActionListener(new ActionListener(){
+								public void actionPerformed(ActionEvent e)
+								{
+									int returnVal = itunesChooser.showOpenDialog(tabs);
+									if(returnVal == JFileChooser.APPROVE_OPTION)
+									{
+										itunesInput.setText(itunesChooser.getSelectedFile().getAbsolutePath());
+									}
+								}
+							});
+						}
+						itunesLoadButton = new JButton("Load");
+						{
+							itunesLoadButton.addActionListener(new ActionListener(){
+								public void actionPerformed(ActionEvent e)
+								{
+									try
+									{
+										library = new iTunesLibrary(itunesInput.getText());
+										setupLibraryTab();
+										if(deviceFiles != null)
+											setupSyncTab();
+									}
+									catch(iTunesLibrary.InvalidLibraryException x)
+									{
+										System.out.println(x);
+									}
+								}
+							});
+						}
+						deviceScanLabel = new JLabel("");
+					}
+					setupPanel.add(itunesInput, new GuiLayout.GuiConstraint(setupPanel,			"0",	"0",	"400",	"25", itunesInput));
+					setupPanel.add(itunesBrowseButton, new GuiLayout.GuiConstraint(setupPanel,	"400",	"0",	"100",	"25", itunesBrowseButton));
+					setupPanel.add(itunesLoadButton, new GuiLayout.GuiConstraint(setupPanel,	"500",	"0",	"100",	"25", itunesLoadButton));
+					setupPanel.add(deviceScanLabel, new GuiLayout.GuiConstraint(setupPanel,		"20",	"40",	"600",	"25", deviceScanLabel));
+					
 					playlistPanel = new JPanel(new GuiLayout());
 					{
-						playlistTable = new JTable(library.getPlaylistDisplayData(), library.getPlaylistDisplayColumns()){
+						playlistTable = new JTable(new DefaultTableModel()){
 							public boolean isCellEditable(int row, int column) {return false;}
 						};
 						playlistScroller = new JScrollPane(playlistTable);
@@ -143,7 +201,7 @@ public class iTunesToAndroid
 						playlistFilesTable.getRowSorter().toggleSortOrder(0);
 						playlistFilesScroller = new JScrollPane(playlistFilesTable);
 						
-						deviceFilesTable = new JTable(deviceFiles.getDisplayData(), new String[]{"Device Files"}){
+						deviceFilesTable = new JTable(new DefaultTableModel(new String[]{"Device Files"}, 0)){
 							public boolean isCellEditable(int row, int column) {return false;}
 						};
 						deviceFilesTable.setFillsViewportHeight(true);
@@ -221,7 +279,18 @@ public class iTunesToAndroid
 											System.out.println("File transfer thread finished."+ (isCancelled() ? " Cancelled prematurely." : ""));
 											progressLog.append("Finished.");
 											//progressDialog.setVisible(false);
-											deviceFiles.buildFileList();
+											try
+											{
+												deviceFiles.buildFileList();
+											}
+											catch(DeviceLibrary.DeviceMissingException x1)
+											{
+												System.out.println(x1);
+											}
+											catch(DeviceLibrary.ADBException x2)
+											{
+												System.out.println(x2);
+											}
 											setupTransferTables();
 										}
 									};
@@ -308,7 +377,18 @@ public class iTunesToAndroid
 										{
 											System.out.println("File delete thread finished."+ (isCancelled() ? " Cancelled prematurely." : ""));
 											deleteDialog.setVisible(false);
-											deviceFiles.buildFileList();
+											try
+											{
+												deviceFiles.buildFileList();
+											}
+											catch(DeviceLibrary.DeviceMissingException x1)
+											{
+												System.out.println(x1);
+											}
+											catch(DeviceLibrary.ADBException x2)
+											{
+												System.out.println(x2);
+											}
 											setupTransferTables();
 										}
 									};
@@ -336,16 +416,16 @@ public class iTunesToAndroid
 					playlistPanel.add(copyToDevice, new GuiLayout.GuiConstraint(playlistPanel,			"66%",	"45%",	"34%",	"5%", copyToDevice));
 					playlistPanel.add(notInPlaylistsScroller, new GuiLayout.GuiConstraint(playlistPanel,"66%",	"50%",	"34%",	"45%", notInPlaylistsScroller));
 					playlistPanel.add(deleteFromDevice, new GuiLayout.GuiConstraint(playlistPanel,		"66%",	"95%",	"34%",	"5%", deleteFromDevice));
-					
-					libraryTable = new JTable(library.getDisplayData(), library.getDisplayColumns()){
-						public boolean isCellEditable(int row, int column) {return false;}
-					};
-					libraryTable.setFillsViewportHeight(true);
-					libraryTable.setAutoCreateRowSorter(true);
-					libraryScroller = new JScrollPane(libraryTable);
 				}
+				tabs.addTab("Setup", setupPanel);
 				tabs.addTab("Sync", playlistPanel);
-				tabs.addTab("iTunes Library", libraryScroller);
+				tabs.addChangeListener(new ChangeListener(){
+					public void stateChanged(ChangeEvent e)
+					{
+						if(tabs.getSelectedComponent() == setupPanel)
+							startPeriodicDeviceScan();
+					}
+				});
 				
 				add(tabs, new GuiLayout.GuiConstraint(this,	"0,left",	"0,top",	"0,right",	"0,bottom", tabs));
 				
@@ -395,15 +475,125 @@ public class iTunesToAndroid
 						deleteTask.cancel(false);
 					}
 				});
+				
+				setupTransferTables();
+			}
+			
+			public void startPeriodicDeviceScan()
+			{
+				if(scanForDeviceTask != null && !scanForDeviceTask.isDone())
+					return;
+				scanForDeviceTask = new SwingWorker<Void,Void>() {
+					public Void doInBackground()
+					{
+						short prevStatus = -2;
+						String device;
+						String prevStr = "";
+						while(tabs.getSelectedComponent() == setupPanel)
+						{
+							try
+							{
+								if((device = DeviceLibrary.checkForDevice()) != null)
+								{
+									try
+									{
+										if(prevStatus != 1)
+										{
+											deviceFiles = new DeviceLibrary("/sdcard/Music/"); // need to get path based on user input
+											firePropertyChange("scanresult", prevStr, prevStr = "Device found: "+ device);
+											setupDeviceTab();
+											if(library != null)
+												setupSyncTab();
+										}
+										prevStatus = 1;
+									}
+									catch(DeviceLibrary.DeviceMissingException x1)
+									{
+										if(prevStatus != 0)
+											firePropertyChange("scanresult", prevStr, prevStr = x1.getMessage());
+										prevStatus = 0;
+									}
+								}
+								else
+								{
+									if(prevStatus != 0)
+										firePropertyChange("scanresult", prevStr, prevStr = "No Android device found.");
+									prevStatus = 0;
+								}
+							}
+							catch(DeviceLibrary.ADBException x2)
+							{
+								if(prevStatus != -1)
+									firePropertyChange("scanresult", prevStr, prevStr = x2.getMessage());
+								prevStatus = -1;
+							}
+							try
+							{
+								Thread.sleep(1000);
+							}
+							catch(InterruptedException x)
+							{
+								System.out.println(x);
+							}
+						}
+						return null;
+					}
+					
+					public void done()
+					{
+						System.out.println("No longer scanning for Android devices.");
+					}
+				};
+				scanForDeviceTask.addPropertyChangeListener(new PropertyChangeListener(){
+					public void propertyChange(PropertyChangeEvent e)
+					{
+						if("scanresult".equals(e.getPropertyName()))
+						{
+							System.out.println(e.getNewValue());
+							deviceScanLabel.setText(e.getNewValue().toString());
+						}
+					}
+				});
+				scanForDeviceTask.execute();
+				System.out.println("Scanning for Android devices.");
+			}
+			
+			public void setupSyncTab()
+			{
+			}
+			
+			public void setupDeviceTab()
+			{
+				((DefaultTableModel)deviceFilesTable.getModel()).setDataVector(deviceFiles.getDisplayData(), new String[]{"Device Files"});
+			}
+			
+			public void setupLibraryTab()
+			{
+				if(libraryTable == null)
+					libraryTable = new JTable(new DefaultTableModel(library.getDisplayData(), library.getDisplayColumns())){
+						public boolean isCellEditable(int row, int column) {return false;}
+					};
+				else
+					((DefaultTableModel)libraryTable.getModel()).setDataVector(library.getDisplayData(), library.getDisplayColumns());
+				libraryTable.setFillsViewportHeight(true);
+				libraryTable.setAutoCreateRowSorter(true);
+				if(libraryScroller == null)
+					libraryScroller = new JScrollPane(libraryTable);
+				tabs.insertTab("iTunes Library", null, libraryScroller, "Full list of your iTunes library so that you can verify that it has been properly loaded.", tabs.getTabCount());
+				
+				((DefaultTableModel)playlistTable.getModel()).setDataVector(library.getPlaylistDisplayData(), library.getPlaylistDisplayColumns());
 			}
 			
 			public void setupTransferTables()
 			{
 				((DefaultTableModel)playlistFilesTable.getModel()).setRowCount(0);
-				library.buildPlaylistFiles(playlistNames);
-				Iterator<iTunesLibrary.Track> iter = library.getPlaylistFiles().iterator();
-				while(iter.hasNext())
-					((DefaultTableModel)playlistFilesTable.getModel()).addRow(new String[]{iter.next().getRelativePath()});
+				if(library != null)
+				{
+					library.buildPlaylistFiles(playlistNames);
+					Iterator<iTunesLibrary.Track> iter = library.getPlaylistFiles().iterator();
+					while(iter.hasNext())
+						((DefaultTableModel)playlistFilesTable.getModel()).addRow(new String[]{iter.next().getRelativePath()});
+				}
 				
 				((DefaultTableModel)notOnDeviceTable.getModel()).setRowCount(0);
 				((DefaultTableModel)notInPlaylistsTable.getModel()).setRowCount(0);
@@ -414,6 +604,9 @@ public class iTunesToAndroid
 				Iterator<DeviceLibrary.Track> iter3 = filesNotInPlaylists.iterator();
 				while(iter3.hasNext())
 					((DefaultTableModel)notInPlaylistsTable.getModel()).addRow(new String[]{iter3.next().getRelativePath()});
+				
+				copyToDevice.setEnabled(notOnDeviceTable.getRowCount() > 0);
+				deleteFromDevice.setEnabled(notInPlaylistsTable.getRowCount() > 0);
 			}
 		});
 	}

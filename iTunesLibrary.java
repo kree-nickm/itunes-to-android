@@ -16,7 +16,7 @@ public class iTunesLibrary
 	public String path;
 	protected Set<Track> playlistFiles;
 	
-	public iTunesLibrary(String filePath)
+	public iTunesLibrary(String filePath) throws InvalidLibraryException
 	{
 		// Initial setup.
 		libraryFile = new File(filePath);
@@ -30,18 +30,15 @@ public class iTunesLibrary
 		}
 		catch(ParserConfigurationException x1)
 		{
-			System.out.println(x1);
-			return;
+			throw new InvalidLibraryException(x1.getMessage(), x1);
 		}
 		catch(SAXException x2)
 		{
-			System.out.println(x2);
-			return;
+			throw new InvalidLibraryException(x2.getMessage(), x2);
 		}
 		catch(IOException x3)
 		{
-			System.out.println(x3);
-			return;
+			throw new InvalidLibraryException(x3.getMessage(), x3);
 		}
 		
 		// Parse XML into Map.
@@ -57,23 +54,20 @@ public class iTunesLibrary
 		}
 		if(parsedXML == null)
 		{
-			System.out.println("The XML file was not recognized as an iTunes library.");
-			return;
+			throw new InvalidLibraryException("The XML file was not recognized as an iTunes library.");
 		}
 		
 		if(parsedXML.get("Tracks") instanceof Map)
 			allTracks = (Map<String,Object>)parsedXML.get("Tracks");
 		else
 		{
-			System.out.println("No list of tracks was found in this iTunes library.");
-			return;
+			throw new InvalidLibraryException("No list of tracks was found in this iTunes library.");
 		}
 		if(parsedXML.get("Playlists") instanceof List)
 			playlists = (List<Object>)parsedXML.get("Playlists");
 		else
 		{
-			System.out.println("No list of playlists was found in this iTunes library.");
-			return;
+			throw new InvalidLibraryException("No list of playlists was found in this iTunes library.");
 		}
 		if(parsedXML.get("Music Folder") instanceof String)
 		{
@@ -89,8 +83,7 @@ public class iTunesLibrary
 		}
 		else
 		{
-			System.out.println("No music folder was defined in this iTunes library.");
-			return;
+			throw new InvalidLibraryException("No music folder was defined in this iTunes library.");
 		}
 		System.out.println("iTunes library read into memory.");
 		loaded = true;
@@ -352,6 +345,18 @@ public class iTunesLibrary
 			}
 			else
 				return false;
+		}
+	}
+	
+	public class InvalidLibraryException extends Exception
+	{
+		public InvalidLibraryException(String message)
+		{
+			super(message);
+		}
+		public InvalidLibraryException(String message, Throwable cause)
+		{
+			super(message, cause);
 		}
 	}
 }

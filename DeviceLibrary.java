@@ -4,11 +4,34 @@ import java.util.*;
 
 public class DeviceLibrary
 {
+	public static String checkForDevice() throws ADBException
+	{
+		try
+		{
+			ProcessBuilder pb = new ProcessBuilder("adb", "devices");
+			pb.redirectErrorStream(true);
+			Process p = pb.start();
+			InputStream in = p.getInputStream();
+			BufferedReader stdInput = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+			String s;
+			while((s = stdInput.readLine()) != null)
+			{
+				if(s.endsWith("device"))
+					return s;
+			}
+		}
+		catch(IOException x)
+		{
+			throw new ADBException(x.getMessage(), x);
+		}
+		return null;
+	}
+	
 	public boolean loaded = false;
 	public Set<Track> deviceFiles;
 	public String path;
 	
-	public DeviceLibrary(String path)
+	public DeviceLibrary(String path) throws DeviceMissingException, ADBException
 	{
 		if(path.endsWith("/"))
 			this.path = path;
@@ -17,37 +40,27 @@ public class DeviceLibrary
 		buildFileList();
 	}
 	
-	public void buildFileList()
+	public void buildFileList() throws DeviceMissingException, ADBException
 	{
 		loaded = false;
 		deviceFiles = new HashSet<Track>();
-		Process p;
 		try
 		{
-			p = Runtime.getRuntime().exec("adb shell ls -p -R '"+ path +"'");
-		}
-		catch(IOException x1)
-		{
-			System.out.println(x1);
-			return;
-		}
-		BufferedReader stdInput;
-		try
-		{
-			stdInput = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
-		}
-		catch(UnsupportedEncodingException x)
-		{
-			System.out.println(x);
-			return;
-		}
-		String folder = null;
-		String s;
-		try
-		{
+			ProcessBuilder pb = new ProcessBuilder("adb", "shell", "ls", "-p", "-R", path);
+			pb.redirectErrorStream(true);
+			Process p = pb.start();
+			InputStream in = p.getInputStream();
+			BufferedReader stdInput = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+			//int numLines = 0;
+			String folder = null;
+			String s;
 			while((s = stdInput.readLine()) != null)
 			{
-				if(s.endsWith(":"))
+				//numLines++;
+				//System.out.println(s);
+				if(s.equals("error: no devices/emulators found"))
+					throw new DeviceMissingException("No Android device was detected by Android Debug Bridge.");
+				else if(s.endsWith(":"))
 					folder = s.substring(path.length(), s.length()-1) +"/";
 				else if(s.length() > 0 && !s.endsWith("/") && folder != null)
 					deviceFiles.add(new Track(folder, s));
@@ -55,8 +68,13 @@ public class DeviceLibrary
 		}
 		catch(IOException x)
 		{
-			System.out.println(x);
-			return;
+			if(x.getMessage().startsWith("Cannot run program"))
+				throw new ADBException(x.getMessage(), x);
+			else
+			{
+				System.out.println(x);
+				return;
+			}
 		}
 		System.out.println("Device files loaded, "+ deviceFiles.size() +" found.");
 		loaded = true;
@@ -140,6 +158,30 @@ public class DeviceLibrary
 		public String toString()
 		{
 			return getAbsolutePath();
+		}
+	}
+	
+	public static class DeviceMissingException extends Exception
+	{
+		public DeviceMissingException(String message)
+		{
+			super(message);
+		}
+		public DeviceMissingException(String message, Throwable cause)
+		{
+			super(message, cause);
+		}
+	}
+	
+	public static class ADBException extends Exception
+	{
+		public ADBException(String message)
+		{
+			super(message);
+		}
+		public ADBException(String message, Throwable cause)
+		{
+			super(message, cause);
 		}
 	}
 }
