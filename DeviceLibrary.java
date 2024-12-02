@@ -5,35 +5,11 @@ import java.util.regex.*;
 
 public class DeviceLibrary
 {
-	public static String checkForDevice() throws ADBException
-	{
-		try
-		{
-			ProcessBuilder pb = new ProcessBuilder("adb", "devices", "-l");
-			pb.redirectErrorStream(true);
-			Process p = pb.start();
-			InputStream in = p.getInputStream();
-			BufferedReader stdInput = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-			Pattern regex = Pattern.compile(".*\\bdevice\\b.*");
-			String s;
-			while((s = stdInput.readLine()) != null)
-			{
-				if(regex.matcher(s).matches())
-					return s;
-			}
-		}
-		catch(IOException x)
-		{
-			throw new ADBException(x.getMessage(), x);
-		}
-		return null;
-	}
-	
 	public boolean loaded = false;
 	public Set<Track> deviceFiles;
 	public String path;
 	
-	public DeviceLibrary(String path) throws DeviceMissingException, ADBException
+	public DeviceLibrary(String path) throws Device.DeviceMissingException, Device.ADBException
 	{
 		if(path.endsWith("/"))
 			this.path = path;
@@ -42,27 +18,19 @@ public class DeviceLibrary
 		buildFileList();
 	}
 	
-	public void buildFileList() throws DeviceMissingException, ADBException
+	public void buildFileList() throws Device.DeviceMissingException, Device.ADBException
 	{
 		loaded = false;
 		deviceFiles = new HashSet<Track>();
 		try
 		{
-			ProcessBuilder pb = new ProcessBuilder("adb", "shell", "ls", "-p", "-R", path);
-			pb.redirectErrorStream(true);
-			Process p = pb.start();
-			InputStream in = p.getInputStream();
-			BufferedReader stdInput = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-			//int numLines = 0;
+      String[] output = Device.cmd("adb", "shell", "ls", "-p", "-R", "-1", path);
 			String folder = null;
-			String s;
-			while((s = stdInput.readLine()) != null)
+			for(String s : output)
 			{
-				//numLines++;
-				//System.out.println(s);
 				if(s.equals("error: no devices/emulators found"))
-					throw new DeviceMissingException("No Android device was detected by Android Debug Bridge.");
-				else if(s.endsWith(":"))
+					throw new Device.DeviceMissingException("No Android device was detected by Android Debug Bridge.");
+				else if(s.endsWith(":") && s.length() > path.length())
 					folder = s.substring(path.length(), s.length()-1) +"/";
 				else if(s.length() > 0 && !s.endsWith("/") && folder != null)
 					deviceFiles.add(new Track(folder, s));
@@ -71,7 +39,7 @@ public class DeviceLibrary
 		catch(IOException x)
 		{
 			if(x.getMessage().startsWith("Cannot run program"))
-				throw new ADBException(x.getMessage(), x);
+				throw new Device.ADBException(x.getMessage(), x);
 			else
 			{
 				System.out.println(x);
@@ -95,22 +63,33 @@ public class DeviceLibrary
 		return result;
 	}
 	
-	public class Track
+	public class Track implements iTunesToAndroid.Track
 	{
 		protected String name;
 		protected String nameOnly;
 		protected String extension;
 		protected String relativePath;
 		protected String noExtension;
+    public iTunesLibrary.Track pairedTrack;
 		
 		public Track(String folders, String file)
 		{
-			name = file;
-			int dot = file.lastIndexOf('.');
-			nameOnly = file.substring(0, dot);
-			extension = file.substring(dot+1);
-			relativePath = folders + file;
-			noExtension = relativePath.substring(0, relativePath.lastIndexOf('.'));
+			name = file.replace("\\ ", " ");
+			int dot = name.lastIndexOf('.');
+			if(dot > -1)
+			{
+				nameOnly = name.substring(0, dot);
+				extension = name.substring(dot+1);
+			}
+			else
+			{
+				nameOnly = name;
+				extension = "";
+				dot = name.length();
+			}
+			relativePath = folders + name;
+			dot += folders.length();
+			noExtension = relativePath.substring(0, dot);
 		}
 		
 		public String getName()
@@ -142,16 +121,29 @@ public class DeviceLibrary
 		{
 			return noExtension;
 		}
+    
+    public iTunesLibrary.Track getPairedTrack()
+    {
+      return pairedTrack;
+    }
 		
 		public boolean equals(Object other)
 		{
 			if(other instanceof iTunesLibrary.Track)
 			{
-				return getRelativePathNoExtension().equals(((iTunesLibrary.Track)other).getRelativePathNoExtension());
+        String myUnique = iTunesToAndroid.Track.normalizePath(getRelativePathNoExtension());
+        String otherUnique = iTunesToAndroid.Track.normalizePath(((iTunesLibrary.Track)other).getRelativePathNoExtension());
+        boolean equal = myUnique.equals(otherUnique);
+        if(equal)
+        {
+          this.pairedTrack = (iTunesLibrary.Track)other;
+          ((iTunesLibrary.Track)other).pairedTrack = this;
+        }
+        return equal;
 			}
 			else if(other instanceof DeviceLibrary.Track)
 			{
-				return relativePath.equals(((DeviceLibrary.Track)other).getRelativePath());
+				return getRelativePath().equals(((DeviceLibrary.Track)other).getRelativePath());
 			}
 			else
 				return false;
@@ -160,30 +152,6 @@ public class DeviceLibrary
 		public String toString()
 		{
 			return getAbsolutePath();
-		}
-	}
-	
-	public static class DeviceMissingException extends Exception
-	{
-		public DeviceMissingException(String message)
-		{
-			super(message);
-		}
-		public DeviceMissingException(String message, Throwable cause)
-		{
-			super(message, cause);
-		}
-	}
-	
-	public static class ADBException extends Exception
-	{
-		public ADBException(String message)
-		{
-			super(message);
-		}
-		public ADBException(String message, Throwable cause)
-		{
-			super(message, cause);
 		}
 	}
 }
