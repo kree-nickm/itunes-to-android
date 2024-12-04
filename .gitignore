@@ -1,2 +1,5 @@
 *.class
+*.jar
+adb*
 manifest.txt
+Releases/
